@@ -1,6 +1,4 @@
-/////
-/////////
-///////
+
 import SwiftUI
 
 struct AnalyzeView: View {
