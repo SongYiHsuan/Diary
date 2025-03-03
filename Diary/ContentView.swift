@@ -20,7 +20,7 @@ struct ContentView: View {
                 }
                 .tag(0)
 
-            DiaryRecordView()
+            DiaryRecordView(selectedTab: $selectedTab)
                 .tabItem {
                     Image("diary")
                         .resizable()

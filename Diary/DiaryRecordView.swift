@@ -2,7 +2,9 @@ import SwiftUI
 
 struct DiaryRecordView: View {
     @EnvironmentObject var diaryViewModel: DiaryViewModel
-    @State private var selectedEntry: DiaryEntry? // ✅ 存儲選中的日記
+    @State private var selectedEntry: DiaryEntry? // 存儲選中的日記
+    @Binding var selectedTab: Int
+
     
     var body: some View {
         NavigationView {
@@ -32,26 +34,33 @@ struct DiaryRecordView: View {
                             }
                         }
                     }
-                    .contentShape(Rectangle()) // ✅ **讓整個 HStack 可點擊**
+                    .contentShape(Rectangle()) // 讓整個 HStack 可點擊
                     .onTapGesture {
-                        selectedEntry = entry // ✅ **點擊後打開日記詳情**
+                        selectedEntry = entry // 點擊後打開日記詳情
                     }
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
-                            diaryViewModel.deleteEntry(entry) // ✅ **刪除單筆日記**
+                            diaryViewModel.deleteEntry(entry) //*刪除單筆日記
                         } label: {
                             Label("刪除", systemImage: "trash")
                         }
-                        .tint(Theme.accentColor)
+                        .tint(Theme.deleteColor)
+                        Button {
+                            diaryViewModel.editingEntry = entry // 設定要編輯的內容
+                            selectedTab = 2 // 跳轉到DiaryEditView
+                        } label: {
+                            Label("編輯", systemImage: "pencil")
+                        }
+                        .tint(Theme.successColor)
                     }
-                    .listRowBackground(Theme.backgroundColor) // ✅ **每行背景一致**
+                    .listRowBackground(Theme.backgroundColor) // 每行背景一致
                 }
             }
             .scrollContentBackground(.hidden)
             .background(Theme.backgroundColor)
             .navigationTitle("Your Memory")
         }
-        .fullScreenCover(item: $selectedEntry) { entry in // ✅ **彈出 DiaryDetailView**
+        .fullScreenCover(item: $selectedEntry) { entry in // 彈出 DiaryDetailView
             DiaryDetailView(entry: entry)
         }
     }

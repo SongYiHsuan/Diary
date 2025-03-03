@@ -3,6 +3,9 @@ import CoreData
 
 class DiaryViewModel: ObservableObject {
     @Published var diaryEntries: [DiaryEntry] = []
+    @Published var editingEntry: DiaryEntry?
+
+
 
     private let context = PersistenceController.shared.context
 
@@ -46,6 +49,15 @@ class DiaryViewModel: ObservableObject {
         saveContext()
     }
     
+    func updateEntry(_ entry: DiaryEntry) {
+        if let index = diaryEntries.firstIndex(where: { $0.id == entry.id }) {
+            diaryEntries[index] = entry
+            saveContext()  // Core Data 儲存
+            fetchEntries() // 重新載入
+        }
+    }
+
+
     private func saveContext() {
         do {
             try context.save()
