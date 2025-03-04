@@ -41,6 +41,7 @@ struct ContentView: View {
                 .tag(2) // "新增" 頁面標記為 2
 
             AnalyzeView()
+                .environmentObject(diaryViewModel)
                 .tabItem {
                     Image("analyze")
                         .resizable()

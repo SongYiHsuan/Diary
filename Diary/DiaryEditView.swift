@@ -110,7 +110,7 @@ struct DiaryEditView: View {
             return
         }
 
-        if isEditing, var entry = diaryViewModel.editingEntry {
+        if isEditing, let entry = diaryViewModel.editingEntry {
             // 編輯模式：更新
             entry.text = text
             entry.imageData = selectedImages.first?.jpegData(compressionQuality: 0.8)
