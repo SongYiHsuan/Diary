@@ -61,13 +61,13 @@ struct AnalyzeView: View {
             Chart(allWeekDates, id: \.self) { date in
                 if let happiness = weeklyHappinessData.first(where: { $0.date == date })?.happiness {
                     BarMark(
-                        x: .value("日期", formatToDisplayDate(date)),
+                        x: .value("日期", Common.formatToDisplayDate(date)),
                         y: .value("快樂指數", happiness)
                     )
                     .foregroundStyle(Color.teal)
                 } else {
                     BarMark(
-                        x: .value("日期", formatToDisplayDate(date)),
+                        x: .value("日期", Common.formatToDisplayDate(date)),
                         y: .value("快樂指數", 0)
                     )
                     .foregroundStyle(Color.gray.opacity(0.3))
