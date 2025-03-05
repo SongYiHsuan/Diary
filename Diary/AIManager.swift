@@ -7,6 +7,7 @@ class AIManager: ObservableObject {
     @Published var apiKey: String = ""
     @Published var aiResponse: String = "正在取得 AI 訊息..."
     
+    
     private var apiKeyState: APIKeyState = .loading
     private let db = Firestore.firestore()
     
@@ -144,6 +145,51 @@ class AIManager: ObservableObject {
             }
         }
     }
+    
+    //情緒比例圓餅圖
+    func analyzeEmotionProportion(entries: [DiaryEntry], completion: @escaping (Result<[EmotionData], AIError>) -> Void) {
+        let combinedText = entries.map { "日期\($0.date ?? "")：\($0.text ?? "")" }.joined(separator: "\n")
+
+        let prompt = """
+        下面是使用者近一週或近一月的日記內容，請分析所有日記的整體「情緒比例」，回傳格式如下：
+        快樂: 30%
+        生氣: 25%
+        焦慮: 15%
+        悲傷: 20%
+        平靜: 10%
+        只要這個格式，不需要其他說明。
+        \(combinedText)
+        """
+
+        fetchAIResponse(prompt: prompt) { result in
+            switch result {
+            case .success(let responseText):
+                let data = responseText
+                    .split(separator: "\n")
+                    .compactMap { line -> EmotionData? in
+                        let parts = line.components(separatedBy: ":")
+                        guard parts.count == 2 else {
+                            return nil
+                        }
+                        
+                        let rawEmotion = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+                        let rawPercentage = parts[1].trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "%", with: "")
+
+                        guard let percentage = Double(rawPercentage) else {
+                            return nil
+                        }
+
+                        return EmotionData(emotion: rawEmotion, percentage: percentage)
+                    }
+                completion(.success(data))
+
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+
+    }
+
 
 }
 
@@ -162,3 +208,9 @@ enum AIError: Error, LocalizedError {
     }
 }
 
+// 定義資料結構
+struct EmotionData: Identifiable {
+    let id = UUID()
+    let emotion: String
+    let percentage: Double
+}
