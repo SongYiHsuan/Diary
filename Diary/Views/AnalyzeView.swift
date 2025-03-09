@@ -34,6 +34,8 @@ struct AnalyzeView: View {
                 weeklyChartView()
                     .frame(height: 150)
                     .padding(.horizontal)
+                AIResponseView().frame(height: 150)
+                    .padding(.horizontal)
             }
 
             Spacer()
@@ -49,7 +51,7 @@ struct AnalyzeView: View {
             HStack {
                 Rectangle()
                     .fill(Color.teal)
-                    .frame(width: 15, height: 15)
+                    .frame(width: 15)
                     .cornerRadius(3)
                 Text("開心")
                     .font(.subheadline)
@@ -81,6 +83,31 @@ struct AnalyzeView: View {
                 .shadow(color: .gray.opacity(0.3), radius: 3, x: 0, y: 2)
         )
     }
+    
+    //
+    @ViewBuilder
+    private func AIResponseView() -> some View {
+        VStack(alignment: .leading) {
+                Text("近況回饋")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                    .frame(width: UIScreen.main.bounds.width ,height: UIScreen.main.bounds.height/4/4,alignment: .leading)
+            Text(GetAIFeedBack())
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                    .frame(width: UIScreen.main.bounds.width ,height: UIScreen.main.bounds.height/4*3/4, alignment: .leading)
+            }
+            .padding(.top, 8)
+            .padding(.leading, 8)
+        
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white)
+                .shadow(color: .gray.opacity(0.3), radius: 3, x: 0, y: 2)
+        )
+    }
+    
+    
 
     private func fetchWeeklyHappiness() {
         let pastWeekEntries = diaryViewModel.diaryEntries.filter { entry in
@@ -119,4 +146,5 @@ struct AnalyzeView: View {
         formatter.dateFormat = "yyyyMMdd"
         return formatter
     }
+
 }
