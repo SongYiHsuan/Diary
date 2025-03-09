@@ -190,6 +190,56 @@ class AIManager: ObservableObject {
 
     }
 
+    
+    func analyzeTopWords(entries: [DiaryEntry], completion: @escaping (Result<[(word: String, count: Int)], AIError>) -> Void) {
+        let combinedText = entries.map { $0.text ?? "" }.joined(separator: " ")
+        let prompt = """
+        以下是使用者近一個月的日記內容，請統計最常出現的前三個單字，回傳格式如下：
+        開心 12次
+        工作 10次
+        朋友 9次
+        只要這個格式，不要額外解釋，也不要換行輸出其他內容。
+        \(combinedText)
+        """
+
+        fetchAIResponse(prompt: prompt) { result in
+            switch result {
+            case .success(let responseText):
+                //print("AI 回傳結果:\n\(responseText)") // 🔥 Debug：查看 AI 回應
+
+                let words = responseText.split(separator: "\n").compactMap { line -> (word: String, count: Int)? in
+                    let parts = line.split(separator: " ")
+                    
+                    // 確保至少有兩個部分 (單字 和 次數)
+                    guard parts.count == 2 else {
+                        //print("無法解析此行: \(line)") // 🔥 Debug：查看錯誤行
+                        return nil
+                    }
+
+                    let word = String(parts[0]).trimmingCharacters(in: .whitespaces)
+                    let countString = parts[1].replacingOccurrences(of: "次", with: "")
+                    
+                    guard let count = Int(countString) else {
+                        //print("無法轉換數字: \(countString)") // 🔥 Debug：查看轉換錯誤
+                        return nil
+                    }
+
+                    return (word, count)
+                }
+
+                if words.isEmpty {
+                    //print("沒有解析出任何字詞") // 🔥 Debug：如果 `words` 仍然是空的
+                }
+
+                completion(.success(words))
+
+            case .failure(let error):
+                //print("統計字詞失敗: \(error.localizedDescription)")
+                completion(.failure(error))
+            }
+        }
+    }
+
 
 }
 

@@ -8,7 +8,7 @@ struct AnalyzeView: View {
     @State private var isLoading = true
     @State private var weeklyHappinessData: [DailyHappiness] = []
     @State private var emotionData: [EmotionData] = []
-
+    @State private var topWordsData: [(word: String, count: Int)] = []
 
     let allWeekDates: [String] = {
         let calendar = Calendar.current
@@ -28,48 +28,96 @@ struct AnalyzeView: View {
     var body: some View {
         VStack {
             Spacer()
+             
             HStack {
-                Spacer()  // 讓整體靠右
-                HStack(spacing: 4) {  //
-                    emotionPieChart()
-                        .frame(width: UIScreen.main.bounds.width * 0.35, height: 150)  // 圓餅縮小一點
+                topWordsBox()
+                    .frame(width: (UIScreen.main.bounds.width - 32) * 0.40, height: 140)
 
-                    VStack(alignment: .leading, spacing: 8) {  // 圖例獨立排放
-                        ForEach(emotionData) { data in
-                            HStack(spacing: 4) {
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(colorForEmotion(data.emotion))
-                                    .frame(width: 12, height: 12)
+                Spacer().frame(width: (UIScreen.main.bounds.width - 32) * 0.02)
 
-                                Text(data.emotion)
-                                    .font(.subheadline)
-                                    .foregroundColor(.black)
-                            }
-                        }
-                    }
-                }
-                .frame(width: UIScreen.main.bounds.width * 0.55, height: 150)  // 整塊50%寬
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.white)
-                        .shadow(color: .gray.opacity(0.3), radius: 3, x: 0, y: 2)
-                )
+                emotionBox()
+                    .frame(width: (UIScreen.main.bounds.width - 32) * 0.58, height: 140)
             }
-            .frame(height: 150)
-            .padding(.horizontal)
+            .frame(width: UIScreen.main.bounds.width - 32)
+            .padding(.horizontal, 16)
 
 
-            
-            weeklyChartView()
-                .frame(height: 150)
-                .padding(.horizontal)
-        }
+             Spacer().frame(height: 18)
+
+             weeklyChartView()
+                 .frame(height: 150)
+                 .padding(.horizontal, 16)
+                 .padding(.top, 18)
+         }
         .onAppear {
             fetchEmotionProportion()
             fetchWeeklyHappiness()
+            fetchTopWords()
         }
     }
+    //常用字詞
+    @ViewBuilder
+    private func topWordsBox() -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("常用字詞")
+                .font(.subheadline)
+                .bold()
 
+            if topWordsData.isEmpty {
+                Text("無數據")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .frame(maxHeight: .infinity, alignment: .center) // ✅ 讓「無數據」在框內置中
+            } else {
+                ForEach(topWordsData.prefix(3), id: \.word) { wordData in
+                    Text("\(wordData.word): \(wordData.count)次")
+                        .font(.caption)
+                        .foregroundColor(.black)
+                }
+            }
+
+            Spacer(minLength: 0) // ✅ 確保內容不會撐高，讓兩個框高度一致
+        }
+        .frame(maxWidth: .infinity, minHeight: 150, maxHeight: 150) // ✅ 與圓餅圖框一致高度
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white)
+                .shadow(color: .gray.opacity(0.3), radius: 3, x: 0, y: 2)
+        )
+    }
+
+
+    //圓餅圖區塊
+    @ViewBuilder
+    private func emotionBox() -> some View {
+        HStack(spacing: 8) { // ✅ 讓圓餅圖與圖例有間距
+            emotionPieChart()
+                .frame(width: UIScreen.main.bounds.width * 0.3, height: 150) // ✅ 減小寬度，避免擠壓圖例
+
+            VStack(alignment: .leading, spacing: 6) { // ✅ 讓圖例更清晰
+                ForEach(emotionData) { data in
+                    HStack(spacing: 6) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(colorForEmotion(data.emotion))
+                            .frame(width: 12, height: 12)
+
+                        Text(data.emotion)
+                            .font(.subheadline)
+                            .foregroundColor(.black)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading) // ✅ 確保圖例對齊
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white)
+                .shadow(color: .gray.opacity(0.3), radius: 3, x: 0, y: 2)
+        )
+    }
+    //週快樂指數
     @ViewBuilder
     private func weeklyChartView() -> some View {
         VStack(alignment: .leading) {
@@ -170,6 +218,24 @@ struct AnalyzeView: View {
                 print("分析失敗: \(error.localizedDescription)")
                 self.emotionData = []
                 self.isLoading = false
+            }
+        }
+    }
+
+    private func fetchTopWords() {
+        let pastMonthEntries = diaryViewModel.diaryEntries.filter { entry in
+            guard let dateString = entry.date,
+                  let date = dateFormatter.date(from: dateString) else { return false }
+            return Calendar.current.isDate(date, equalTo: Date(), toGranularity: .month)
+        }
+
+        AIManager.shared.analyzeTopWords(entries: pastMonthEntries) { result in
+            switch result {
+            case .success(let words):
+                self.topWordsData = words
+            case .failure(let error):
+                print("統計字詞失敗: \(error.localizedDescription)")
+                self.topWordsData = []
             }
         }
     }
