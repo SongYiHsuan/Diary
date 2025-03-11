@@ -11,7 +11,8 @@ struct HomeView: View {
     @AppStorage("selectedEntryID") private var selectedEntryID: String? //  存儲日記 ID（改為 String）
     @AppStorage("lastSelectedDate") private var lastSelectedDate: String? //  存儲上次選擇的日期
     @Binding var selectedTab: Int // 透過綁定來切換 TabView
-    @StateObject private var aiManager = AIManager() // AI 管理器
+    @State private var aiResponse: String = "正在取得AI訊息..."
+
 
     // 取得當前日期
     private var currentDate: String {
@@ -117,14 +118,15 @@ struct HomeView: View {
 
             Spacer()
             
-            //  顯示 AI 產生的鼓勵回應（如果沒日記，就顯示歡迎訊息）
+            // AI 產生的鼓勵回應
             HStack(alignment: .center, spacing: 8) {
                 Image("cat")
                     .resizable()
                     .scaledToFit()
                     .frame(height: 50)
-                Text(aiManager.aiResponse) // 這裡顯示 AI 回應
+                Text(aiResponse)
                     .font(.headline)
+                    .foregroundColor(aiResponse == "正在取得 AI 訊息..." ? .gray : .black)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -132,7 +134,6 @@ struct HomeView: View {
         }
         .onAppear {
             Task {
-                //await aiManager.fetchAIResponse(from: diaryViewModel)
                 while locationManager.currentLocation == nil {
                     print(" 等待 GPS 位置更新...")
                     try? await Task.sleep(nanoseconds: 500_000_000) // 等待 0.5 秒
@@ -146,11 +147,9 @@ struct HomeView: View {
 //                }
             }
         }
-//        .onChange(of: diaryViewModel.diaryEntries) { _ in
-//            Task {
-//                await aiManager.fetchAIResponse(from: diaryViewModel) //  監聽日記變更，重新獲取 AI 回應
-//            }
-//        }
+        .onAppear {
+            //fetchDailyAIMessage()
+        }
         .background(
             LinearGradient(
                 gradient: Gradient(colors: [Theme.backgroundColor, Theme.cardBackground]),
@@ -162,6 +161,18 @@ struct HomeView: View {
             DiaryDetailView(entry: entry)
         }
     }
+    // 取得每日AI訊息
+    private func fetchDailyAIMessage() {
+        AIManager.shared.fetchDailyMessage { result in
+            switch result {
+            case .success(let message):
+                aiResponse = message
+            case .failure(let error):
+                aiResponse = "AI訊息取得失敗: \(error.localizedDescription)"
+            }
+        }
+    }
+
     
     var randomEntry: DiaryEntry? {
         let today = currentDateString()
