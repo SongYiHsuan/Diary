@@ -295,5 +295,5 @@ struct AnalyzeView: View {
     }
 }
 
-}
+
 

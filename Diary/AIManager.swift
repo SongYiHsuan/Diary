@@ -240,7 +240,31 @@ class AIManager: ObservableObject {
         }
     }
 
+    func analyzeFeedback(entries: [DiaryEntry], completion: @escaping (Result<String, AIError>) -> Void) {
+        let combinedText = entries.map { "日期\($0.date ?? "")：\($0.text ?? "")" }.joined(separator: "\n")
+        let prompt = """
+        你是一位專業的心理諮商師，請根據以下的日記內容，提供一段溫暖且具有建設性的回饋。
+        回饋內容應包含：
+        1. 觀察到的情緒模式或行為特徵
+        2. 值得肯定的正面行為或思維
+        3. 可以改善的建議（如果有的話）
+        4. 鼓勵的話
+        
+        請用溫暖親切的語氣，控制在150字以內。
 
+        日記內容：
+        \(combinedText)
+        """
+        
+        fetchAIResponse(prompt: prompt) { result in
+            switch result {
+            case .success(let responseText):
+                completion(.success(responseText))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
 }
 
 //AI Error 定義
