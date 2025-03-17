@@ -9,6 +9,11 @@ struct AnalyzeView: View {
     @State private var weeklyHappinessData: [DailyHappiness] = []
     @State private var emotionData: [EmotionData] = []
     @State private var topWordsData: [(word: String, count: Int)] = []
+    @State private var aiFeedback: String = "正在取得 AI 訊息..."
+    @State private var selectedDiary: DiaryEntry?  // 重要回顧日記
+    private let verticalSpacing: CGFloat = 12
+    private let horizontalPadding: CGFloat = 16
+
 
     let allWeekDates: [String] = {
         let calendar = Calendar.current
@@ -26,49 +31,125 @@ struct AnalyzeView: View {
 
 
     var body: some View {
-        VStack {
+        GeometryReader { geometry in
+            let screenHeight = geometry.size.height
+            let safeBottom = geometry.safeAreaInsets.bottom  // 確保不會超出底部
+            let tabBarHeight: CGFloat = 0  // 根據 `safeBottom` 估算 TabBar
+            let topPadding: CGFloat = geometry.safeAreaInsets.top  // 加入頂部安全區域
+            let totalPadding: CGFloat = topPadding + tabBarHeight
+            let availableHeight = screenHeight - totalPadding - (verticalSpacing * 3)  // 扣掉 TabBar、高度間距
+            let sectionHeight = availableHeight / 4  // 讓四個報表均分
 
-            if isLoading {
-                ProgressView("分析中...")
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
-            } else {
+            VStack(spacing: verticalSpacing) {
+                Spacer()
+                importantReviewBox(sectionHeight: sectionHeight)
+                    .frame(height: sectionHeight,alignment: .center)
+                    .padding(.horizontal, horizontalPadding)
+                AIResponseView(sectionHeight: sectionHeight)
+                    .frame(height: sectionHeight,alignment: .center)
+                    .padding(.horizontal, horizontalPadding)
+
+                HStack(spacing: 12) {
+                    topWordsBox()
+                        .frame(maxWidth: .infinity) // 讓 Box 平均分配
+                        .frame(width: (UIScreen.main.bounds.width - 32) * 0.35)
+
+                    emotionBox(sectionHeight: sectionHeight)
+                        .frame(maxWidth: .infinity) // 讓 Box 平均分配
+                        .frame(width: (UIScreen.main.bounds.width - 32) * 0.65)
+                }
+                .frame(maxWidth: .infinity, alignment: .center) //  讓 HStack 置中
+                .padding(.horizontal, horizontalPadding)
+
+
                 weeklyChartView()
-                    .frame(height: 150)
-                    .padding(.horizontal)
-                AIResponseView().frame(height: 150)
-                    .padding(.horizontal)
+                    .frame(height: sectionHeight,alignment: .center) //  讓開心指數緊貼底部
+                    .padding(.horizontal, horizontalPadding)
+                    .padding(.bottom, safeBottom) //  避免被 TabBar 擋住
+
+                Spacer()
+
             }
-
-            Spacer()
-             
-            HStack {
-                topWordsBox()
-                    .frame(width: (UIScreen.main.bounds.width - 32) * 0.40, height: 140)
-
-                Spacer().frame(width: (UIScreen.main.bounds.width - 32) * 0.02)
-
-                emotionBox()
-                    .frame(width: (UIScreen.main.bounds.width - 32) * 0.58, height: 140)
-            }
-            .frame(width: UIScreen.main.bounds.width - 32)
-            .padding(.horizontal, 16)
-
-
-             Spacer().frame(height: 18)
-
-             weeklyChartView()
-                 .frame(height: 150)
-                 .padding(.horizontal, 16)
-                 .padding(.top, 18)
-         }
+            .frame(maxHeight: .infinity, alignment: .center)
+        }
         .onAppear {
             fetchEmotionProportion()
             fetchWeeklyHappiness()
             fetchTopWords()
+            fetchAIResponse()
+            selectImportantDiary()
         }
     }
-    //常用字詞
+    
+    //重要回顧
+    @ViewBuilder
+    private func importantReviewBox(sectionHeight: CGFloat) -> some View {
+        ZStack(alignment: .bottomTrailing) { 
+            if let selectedDiary = selectedDiary, let imageData = selectedDiary.imageData, let uiImage = UIImage(data: imageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: sectionHeight)
+                    .clipped()
+            } else {
+                Image(systemName: "photo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: sectionHeight)
+                    .foregroundColor(.gray)
+            }
+            
+            //半透明白色底部 + 文字
+            HStack {
+                Spacer()
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(selectedDiary?.date ?? "無日期")
+                        .font(.caption)
+                        .bold()
+                        .foregroundColor(.black)
+
+                    Text(selectedDiary?.text ?? "沒有符合條件的日記")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .lineLimit(4)
+                        .frame(maxWidth: UIScreen.main.bounds.width * 0.6, alignment: .leading)
+                }
+                .padding(8)
+                .background(
+                    Rectangle()
+                        .fill(Color.white)
+                        .shadow(radius: 3)
+                )
+            }
+            .frame(width: UIScreen.main.bounds.width * 0.7,height: sectionHeight * 0.8, alignment: .leading)
+            .offset(x: 0, y: -16)
+        }
+        .frame(height: sectionHeight) //
+        .cornerRadius(12)
+    }
+
+    // **AI 近況回饋**
+    @ViewBuilder
+    private func AIResponseView(sectionHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("近況回饋")
+                .font(.subheadline)
+                .foregroundColor(.black)
+                .padding(.leading, 8)
+
+            Text(aiFeedback)
+                .font(.subheadline)
+                .foregroundColor(.black)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .lineLimit(4)
+        }
+        .frame(height: sectionHeight * 0.85)
+        .background(cardBackground)
+        .layoutPriority(1)
+    }
+
+
+    // **常用字詞**
     @ViewBuilder
     private func topWordsBox() -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -80,7 +161,7 @@ struct AnalyzeView: View {
                 Text("無數據")
                     .font(.caption)
                     .foregroundColor(.gray)
-                    .frame(maxHeight: .infinity, alignment: .center) // ✅ 讓「無數據」在框內置中
+                    .frame(maxHeight: .infinity, alignment: .center)
             } else {
                 ForEach(topWordsData.prefix(3), id: \.word) { wordData in
                     Text("\(wordData.word): \(wordData.count)次")
@@ -89,26 +170,35 @@ struct AnalyzeView: View {
                 }
             }
 
-            Spacer(minLength: 0) // ✅ 確保內容不會撐高，讓兩個框高度一致
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, minHeight: 150, maxHeight: 150) // ✅ 與圓餅圖框一致高度
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white)
-                .shadow(color: .gray.opacity(0.3), radius: 3, x: 0, y: 2)
-        )
+        .background(cardBackground)
     }
 
 
-    //圓餅圖區塊
+    //圓餅圖
     @ViewBuilder
-    private func emotionBox() -> some View {
-        HStack(spacing: 8) { // ✅ 讓圓餅圖與圖例有間距
-            emotionPieChart()
-                .frame(width: UIScreen.main.bounds.width * 0.3, height: 150) // ✅ 減小寬度，避免擠壓圖例
+    private func emotionPieChart() -> some View {
+        Chart(emotionData) { data in
+            SectorMark(
+                angle: .value("比例", data.percentage),
+                innerRadius: .ratio(0.5),
+                outerRadius: .inset(5)
+            )
+            .foregroundStyle(colorForEmotion(data.emotion))
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 6) { // ✅ 讓圖例更清晰
+    // **圓餅圖**
+    @ViewBuilder
+    private func emotionBox(sectionHeight: CGFloat) -> some View {
+        HStack {
+            emotionPieChart()
+                .frame(width: sectionHeight * 0.8, height: sectionHeight * 0.8)
+
+            VStack(alignment: .leading, spacing: 6) {
                 ForEach(emotionData) { data in
                     HStack(spacing: 6) {
                         RoundedRectangle(cornerRadius: 3)
@@ -120,32 +210,32 @@ struct AnalyzeView: View {
                             .foregroundColor(.black)
                     }
                 }
+
+                Spacer()
             }
-            .frame(maxWidth: .infinity, alignment: .leading) // ✅ 確保圖例對齊
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white)
-                .shadow(color: .gray.opacity(0.3), radius: 3, x: 0, y: 2)
-        )
+        .background(cardBackground)
     }
-    //週快樂指數
+
+    // **週快樂指數**
     @ViewBuilder
     private func weeklyChartView() -> some View {
         VStack(alignment: .leading) {
             HStack {
                 Rectangle()
                     .fill(Color.teal)
-                    .frame(width: 15)
-                    .cornerRadius(3)
+                    .frame(width: 10, height: 10) 
+                    .cornerRadius(2)
+
                 Text("開心")
                     .font(.subheadline)
                     .foregroundColor(.gray)
             }
             .padding(.top, 8)
             .padding(.leading, 8)
-            
+
             Chart(allWeekDates, id: \.self) { date in
                 if let happiness = weeklyHappinessData.first(where: { $0.date == date })?.happiness {
                     BarMark(
@@ -153,48 +243,62 @@ struct AnalyzeView: View {
                         y: .value("快樂指數", happiness)
                     )
                     .foregroundStyle(Color.teal)
-                } else {
-                    BarMark(
-                        x: .value("日期", formatToDisplayDate(date)),
-                        y: .value("快樂指數", 0)
-                    )
-                    .foregroundStyle(Color.gray.opacity(0.3))
                 }
             }
-
         }
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white)
-                .shadow(color: .gray.opacity(0.3), radius: 3, x: 0, y: 2)
-        )
+        .frame(maxWidth: .infinity)
+        .background(cardBackground)
     }
-    
-    //
-    @ViewBuilder
-    private func AIResponseView() -> some View {
-        VStack(alignment: .leading) {
-                Text("近況回饋")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                    .frame(width: UIScreen.main.bounds.width ,height: UIScreen.main.bounds.height/4/4,alignment: .leading)
-            Text(GetAIFeedBack())
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                    .frame(width: UIScreen.main.bounds.width ,height: UIScreen.main.bounds.height/4*3/4, alignment: .leading)
-            }
-            .padding(.top, 8)
-            .padding(.leading, 8)
-        
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white)
-                .shadow(color: .gray.opacity(0.3), radius: 3, x: 0, y: 2)
-        )
-    }
-    
-    
 
+    // **通用卡片背景**
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 10)
+            .fill(Color.white)
+            .shadow(color: .gray.opacity(0.3), radius: 3, x: 0, y: 2)
+    }
+    //選擇「情緒最正面且文字最多」的日記
+    private func selectImportantDiary() {
+        let pastMonthEntries = diaryViewModel.diaryEntries.filter { entry in
+            guard let dateString = entry.date,
+                  let date = dateFormatter.date(from: dateString) else { return false }
+            return Calendar.current.isDate(date, equalTo: Date(), toGranularity: .month)
+        }
+
+        guard !pastMonthEntries.isEmpty else {
+            self.selectedDiary = nil
+            return
+        }
+
+        AIManager.shared.selectMostPositiveDiary(entries: pastMonthEntries) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let diary):
+                    self.selectedDiary = diary
+                case .failure:
+                    self.selectedDiary = nil
+                }
+            }
+        }
+    }
+
+    
+    //AI回饋函示
+    private func fetchAIResponse() {
+        AIManager.shared.analyzeAIResponse(entries: diaryViewModel.diaryEntries) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let responseText):
+                    self.aiFeedback = responseText
+                case .failure(let error):
+                    self.aiFeedback = "AI 回應失敗: \(error.localizedDescription)" // 失敗時顯示錯誤
+                }
+                self.isLoading = false
+            }
+        }
+    }
+
+
+    //週快樂指數函式
     private func fetchWeeklyHappiness() {
         let pastWeekEntries = diaryViewModel.diaryEntries.filter { entry in
             guard let dateString = entry.date else { return false }
@@ -227,17 +331,6 @@ struct AnalyzeView: View {
         return formatter.string(from: date)
     }
     
-    @ViewBuilder
-    private func emotionPieChart() -> some View {
-        Chart(emotionData) { data in
-            SectorMark(
-                angle: .value("比例", data.percentage),
-                innerRadius: .ratio(0.5),
-                outerRadius: .inset(5)
-            )
-            .foregroundStyle(colorForEmotion(data.emotion))
-        }
-    }
     private func fetchEmotionProportion() {
         let pastWeekEntries = diaryViewModel.diaryEntries.filter { entry in
             guard let dateString = entry.date,
@@ -248,14 +341,17 @@ struct AnalyzeView: View {
         }
 
         AIManager.shared.analyzeEmotionProportion(entries: pastWeekEntries) { result in
-            switch result {
-            case .success(let data):
-                self.emotionData = data
-                self.isLoading = false
-            case .failure(let error):
-                print("分析失敗: \(error.localizedDescription)")
-                self.emotionData = []
-                self.isLoading = false
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let data):
+                    print("取得情緒比例數據: \(data)")  // 🔥 Debug：確認數據是否有資料
+                    self.emotionData = data
+                    self.isLoading = false
+                case .failure(let error):
+                    print("分析失敗: \(error.localizedDescription)")
+                    self.emotionData = [] // 確保 UI 不會當掉
+                    self.isLoading = false
+                }
             }
         }
     }

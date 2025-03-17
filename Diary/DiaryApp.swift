@@ -4,7 +4,7 @@ import Firebase
 @main
 struct DiaryApp: App {
     init() {
-        FirebaseApp.configure()  
+        FirebaseApp.configure()
     }
 
     var body: some Scene {

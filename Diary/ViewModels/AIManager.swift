@@ -1,6 +1,13 @@
 import Foundation
 import FirebaseFirestore
 
+// MARK: - 快樂指數資料型
+struct DailyHappiness: Identifiable {
+    let id = UUID()
+    let date: String
+    let happiness: Double
+}
+
 class AIManager: ObservableObject {
     static let shared = AIManager()
 
@@ -34,7 +41,7 @@ class AIManager: ObservableObject {
                 if let data = document?.data(), let key = data["api_key"] as? String {
                     self.apiKey = key
                     self.apiKeyState = .loaded
-                    print("成功取得 API Key: \(key.prefix(5))...")
+                    print("成功取得 API Key: \(key)...")
                 } else {
                     self.apiKeyState = .failed
                     print("無法解析 API Key")
@@ -51,6 +58,7 @@ class AIManager: ObservableObject {
         }
 
         guard apiKeyState == .loaded, !apiKey.isEmpty else {
+            print("🔥 API Key 尚未加載完成，請求被拒絕")
             completion(.failure(.apiKeyNotLoaded))
             return
         }
@@ -74,42 +82,104 @@ class AIManager: ObservableObject {
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         } catch {
+            print("JSON 轉換錯誤: \(error.localizedDescription)")
             completion(.failure(.invalidResponse))
             return
         }
 
-        let task = URLSession.shared.dataTask(with: request) { data, _, error in
+        print("發送 API 請求中...")
+
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
             DispatchQueue.main.async {
                 if let error = error {
-                    print("openAI API 錯誤: \(error.localizedDescription)")
+                    print(" OpenAI API 請求錯誤: \(error.localizedDescription)")
                     completion(.failure(.invalidResponse))
                     return
                 }
+
                 guard let data = data else {
+                    print("OpenAI API 回傳空數據")
                     completion(.failure(.invalidResponse))
                     return
                 }
 
                 do {
-                    if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                       let choices = json["choices"] as? [[String: Any]],
+                    let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+                    print(" OpenAI API 回應: \(String(describing: json))") // 🔥 Debug JSON Response
+
+                    if let choices = json?["choices"] as? [[String: Any]],
                        let message = choices.first?["message"] as? [String: Any],
                        let content = message["content"] as? String {
-                        completion(.success(content.trimmingCharacters(in: .whitespacesAndNewlines)))
+                        let cleanedResponse = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                        print("AI 回應成功: \(cleanedResponse)")
+                        completion(.success(cleanedResponse))
                     } else {
+                        print(" 無法解析 AI 回應")
                         completion(.failure(.invalidResponse))
                     }
                 } catch {
+                    print("🔥 JSON 解析錯誤: \(error.localizedDescription)")
                     completion(.failure(.invalidResponse))
                 }
             }
         }
         task.resume()
     }
-
     // 取得每日 AI 鼓勵 (HomeView)
     func fetchDailyMessage(completion: @escaping (Result<String, AIError>) -> Void) {
         fetchAIResponse(prompt: "請給我今天的鼓勵話語,30字以內。", completion: completion)
+    }
+    
+    //重點回顧日記
+    func selectMostPositiveDiary(entries: [DiaryEntry], completion: @escaping (Result<DiaryEntry?, AIError>) -> Void) {
+        guard !entries.isEmpty else {
+            completion(.success(nil))
+            return
+        }
+
+        let combinedText = entries.map { "日期: \($0.date ?? "")，內容: \($0.text ?? "")" }.joined(separator: "\n")
+
+        let prompt = """
+        以下是使用者過去一個月的日記，請幫我選擇 **情緒最正面且文字最多** 的日記內容：
+        - 只需回傳該日記的「日期」，不要額外的說明。
+        
+        \(combinedText)
+        """
+
+        fetchAIResponse(prompt: prompt) { result in
+            switch result {
+            case .success(let responseText):
+                let selectedDate = responseText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                let selectedDiary = entries.first { $0.date == selectedDate }
+
+                completion(.success(selectedDiary))
+
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    //AI總回饋
+    func analyzeAIResponse(entries: [DiaryEntry],completion: @escaping (Result<String, AIError>) -> Void) {
+        let combinedText = entries.map { "日期\($0.date ?? "")：\($0.text ?? "")" }.joined(separator: "\n")
+
+        let prompt = """
+        你是一位專業的心理諮商師，請根據以下的日記內容，提供一段溫暖且具有建設性的回饋。
+        1. 觀察到的情緒模式或行為特徵
+        2. 值得肯定的正面行為或思維
+        3. 可以改善的建議（如果有的話）
+        4. 鼓勵的話
+        5. 不用稱謂，直接給建議文字. 第一行前面要空兩格
+
+        請用溫暖親切的語氣，連同標點符號一定要控制在90字以內。
+
+        日記內容：
+        \(combinedText)
+        """
+
+        fetchAIResponse(prompt: prompt, completion: completion)
     }
 
     //分析近一週快樂指數 (AnalyzeView-一週快樂指數)
@@ -136,7 +206,7 @@ class AIManager: ObservableObject {
                         let date = parts[0]
                             .replacingOccurrences(of: "日期:", with: "")
                             .trimmingCharacters(in: .whitespacesAndNewlines)
-                            .trimmingCharacters(in: [","])  // ⭐️重點：去掉尾巴的逗號
+                            .trimmingCharacters(in: [","])
                         return DailyHappiness(date: date, happiness: happiness)
                     }
                 completion(.success(dataPoints))
@@ -212,7 +282,7 @@ class AIManager: ObservableObject {
                     
                     // 確保至少有兩個部分 (單字 和 次數)
                     guard parts.count == 2 else {
-                        //print("無法解析此行: \(line)") // 🔥 Debug：查看錯誤行
+                        //print("無法解析此行: \(line)")
                         return nil
                     }
 
@@ -220,7 +290,7 @@ class AIManager: ObservableObject {
                     let countString = parts[1].replacingOccurrences(of: "次", with: "")
                     
                     guard let count = Int(countString) else {
-                        //print("無法轉換數字: \(countString)") // 🔥 Debug：查看轉換錯誤
+                        //print("無法轉換數字: \(countString)")
                         return nil
                     }
 
@@ -228,7 +298,7 @@ class AIManager: ObservableObject {
                 }
 
                 if words.isEmpty {
-                    //print("沒有解析出任何字詞") // 🔥 Debug：如果 `words` 仍然是空的
+                    //print("沒有解析出任何字詞") // Debug：如果 `words` 仍然是空的
                 }
 
                 completion(.success(words))
@@ -240,31 +310,6 @@ class AIManager: ObservableObject {
         }
     }
 
-    func analyzeFeedback(entries: [DiaryEntry], completion: @escaping (Result<String, AIError>) -> Void) {
-        let combinedText = entries.map { "日期\($0.date ?? "")：\($0.text ?? "")" }.joined(separator: "\n")
-        let prompt = """
-        你是一位專業的心理諮商師，請根據以下的日記內容，提供一段溫暖且具有建設性的回饋。
-        回饋內容應包含：
-        1. 觀察到的情緒模式或行為特徵
-        2. 值得肯定的正面行為或思維
-        3. 可以改善的建議（如果有的話）
-        4. 鼓勵的話
-        
-        請用溫暖親切的語氣，控制在150字以內。
-
-        日記內容：
-        \(combinedText)
-        """
-        
-        fetchAIResponse(prompt: prompt) { result in
-            switch result {
-            case .success(let responseText):
-                completion(.success(responseText))
-            case .failure(let error):
-                completion(.failure(error))
-            }
-        }
-    }
 }
 
 //AI Error 定義
@@ -288,3 +333,5 @@ struct EmotionData: Identifiable {
     let emotion: String
     let percentage: Double
 }
+
+
