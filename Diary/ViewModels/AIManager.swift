@@ -28,6 +28,77 @@ class AIManager: ObservableObject {
         fetchAPIKey()
     }
 
+    func analyzeData(entries: [DiaryEntry], completion: @escaping (Result<(String, [DailyHappiness], [EmotionData], [(String, Int)], DiaryEntry?), AIError>) -> Void) {
+        print("📊 [AIManager] analyzeData() 被呼叫，日記數量: \(entries.count)")
+
+        let dispatchGroup = DispatchGroup()
+
+        var aiResponseResult: String = ""
+        var happinessDataResult: [DailyHappiness] = []
+        var emotionDataResult: [EmotionData] = []
+        var topWordsResult: [(String, Int)] = []
+        var selectedDiaryResult: DiaryEntry?
+
+        dispatchGroup.enter()
+        analyzeAIResponse(entries: entries) { result in
+            if case .success(let response) = result {
+                aiResponseResult = response
+            }
+            dispatchGroup.leave()
+        }
+
+        dispatchGroup.enter()
+        analyzeWeeklyHappiness(entries: entries) { result in
+            if case .success(let data) = result {
+                happinessDataResult = data
+            }
+            dispatchGroup.leave()
+        }
+
+        dispatchGroup.enter()
+        analyzeEmotionProportion(entries: entries) { result in
+            if case .success(let data) = result {
+                emotionDataResult = data
+            }
+            dispatchGroup.leave()
+        }
+
+        dispatchGroup.enter()
+        analyzeTopWords(entries: entries) { result in
+            if case .success(let data) = result {
+                topWordsResult = data
+            }
+            dispatchGroup.leave()
+        }
+
+        dispatchGroup.enter()
+        selectMostPositiveDiary(entries: entries) { result in
+            if case .success(let diary) = result {
+                selectedDiaryResult = diary
+            }
+            dispatchGroup.leave()
+        }
+
+        dispatchGroup.notify(queue: .main) {
+            print("📊 [DEBUG] analyzeData() 執行完成")
+            print("📊 AI 回饋: \(aiResponseResult)")
+            print("📊 快樂數據: \(happinessDataResult)")
+            print("📊 情緒數據: \(emotionDataResult)")
+            print("📊 最高頻詞: \(topWordsResult)")
+            print("📊 重要日記: \(selectedDiaryResult?.text ?? "❌ 無")")
+
+            if aiResponseResult.isEmpty || happinessDataResult.isEmpty || emotionDataResult.isEmpty || topWordsResult.isEmpty {
+                print("❌ [DEBUG] AI 分析回傳數據部分為空，可能出錯")
+            }
+
+            completion(.success((aiResponseResult, happinessDataResult, emotionDataResult, topWordsResult, selectedDiaryResult)))
+        }
+
+
+    }
+
+
+    
     // 從 Firebase 取得 API Key
     private func fetchAPIKey() {
         db.collection("openAI").document("api_key").getDocument { document, error in

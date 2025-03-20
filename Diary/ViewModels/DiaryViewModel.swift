@@ -62,7 +62,16 @@ class DiaryViewModel: ObservableObject {
         do {
             try context.save()
         } catch {
-            print("❌ 無法儲存變更: \(error)")
+            print("無法儲存變更: \(error)")
         }
     }
+    
+    func hasEntryForToday() -> Bool {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        let today = formatter.string(from: Date())
+
+        return diaryEntries.contains { $0.date == today }
+    }
 }
+

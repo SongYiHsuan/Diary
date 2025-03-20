@@ -11,6 +11,11 @@ struct AnalyzeView: View {
     @State private var topWordsData: [(word: String, count: Int)] = []
     @State private var aiFeedback: String = "正在取得 AI 訊息..."
     @State private var selectedDiary: DiaryEntry?  // 重要回顧日記
+    @State private var isDetailPresented = false  // 控制是否顯示 DiaryDetailView
+    @State private var isShowingFullResponse = false // 控制近況回顧彈出視窗
+    @State private var lastAnalysisDate: String = ""
+
+
     private let verticalSpacing: CGFloat = 12
     private let horizontalPadding: CGFloat = 16
 
@@ -45,46 +50,106 @@ struct AnalyzeView: View {
                 importantReviewBox(sectionHeight: sectionHeight)
                     .frame(height: sectionHeight,alignment: .center)
                     .padding(.horizontal, horizontalPadding)
+                    .onTapGesture { // 點擊進入 DiaryDetailView
+                        if let diary = selectedDiary {
+                            selectedDiary = diary
+                            isDetailPresented = true
+                        }
+                    }
                 AIResponseView(sectionHeight: sectionHeight)
                     .frame(height: sectionHeight,alignment: .center)
                     .padding(.horizontal, horizontalPadding)
 
                 HStack(spacing: 12) {
                     topWordsBox()
-                        .frame(maxWidth: .infinity) // 讓 Box 平均分配
-                        .frame(width: (UIScreen.main.bounds.width - 32) * 0.35)
+                        .frame(width: (UIScreen.main.bounds.width - (horizontalPadding * 2 + 12)) * 0.35) // ✅ 減去 padding + spacing
 
                     emotionBox(sectionHeight: sectionHeight)
-                        .frame(maxWidth: .infinity) // 讓 Box 平均分配
-                        .frame(width: (UIScreen.main.bounds.width - 32) * 0.65)
+                        .frame(width: (UIScreen.main.bounds.width - (horizontalPadding * 2 + 12)) * 0.65) // ✅ 減去 padding + spacing
                 }
-                .frame(maxWidth: .infinity, alignment: .center) //  讓 HStack 置中
-                .padding(.horizontal, horizontalPadding)
-
+                .frame(maxWidth: .infinity) // 讓 HStack 內部元件保持置中
+                .padding(.horizontal, horizontalPadding) // 確保與整體 UI 對齊
+                Spacer()
 
                 weeklyChartView()
                     .frame(height: sectionHeight,alignment: .center) //  讓開心指數緊貼底部
                     .padding(.horizontal, horizontalPadding)
                     .padding(.bottom, safeBottom) //  避免被 TabBar 擋住
-
                 Spacer()
 
             }
             .frame(maxHeight: .infinity, alignment: .center)
         }
         .onAppear {
-            fetchEmotionProportion()
-            fetchWeeklyHappiness()
-            fetchTopWords()
-            fetchAIResponse()
-            selectImportantDiary()
+            print("📊 [DEBUG] AnalyzeView onAppear 被觸發")
+            fetchAIAnalysis(force: false)
+            //fetchAIAnalysis(force: true)
+
+            let storedHappiness = UserDefaults.standard.array(forKey: "happinessData") ?? []
+            let storedEmotion = UserDefaults.standard.array(forKey: "emotionData") ?? []
+            let storedTopWords = UserDefaults.standard.array(forKey: "topWordsData") ?? []
+            let storedDiary = UserDefaults.standard.string(forKey: "selectedDiary") ?? "❌ 無"
+
+            print("""
+            📊 [DEBUG] 讀取 UserDefaults:
+            - AI 回饋: \(UserDefaults.standard.string(forKey: "aiAnalysisResult") ?? "❌ 無")
+            - 快樂數據: \(storedHappiness)
+            - 情緒數據: \(storedEmotion)
+            - 最高頻詞: \(storedTopWords)
+            - 重要日記: \(storedDiary)
+            """)
+
+//            fetchEmotionProportion()
+//            fetchWeeklyHappiness()
+//            fetchTopWords()
+//            selectImportantDiary()
         }
+
+        .fullScreenCover(isPresented: $isDetailPresented) { // 跳轉到日記詳情
+            if let diary = selectedDiary {
+                DiaryDetailView(entry: diary)
+            }
+        }
+    }
+    
+    //定期執行AI manager
+    private func fetchAIAnalysis(force: Bool) {
+        let today = currentDateString()
+        let lastAnalysisDate = UserDefaults.standard.string(forKey: "lastAnalysisDate") ?? ""
+
+        if lastAnalysisDate == today, !force {
+            print("✅ [DEBUG] 今天的 AI 分析已載入，無需重新執行")
+            return
+        }
+
+        print("📖 [DEBUG] 取得日記數據，共 \(diaryViewModel.diaryEntries.count) 篇")
+
+        guard !diaryViewModel.diaryEntries.isEmpty else {
+            print("❌ [DEBUG] 日記數據為空，AI 分析未執行")
+            return
+        }
+
+        // 直接呼叫各個函數來執行分析
+        fetchEmotionProportion()
+        fetchWeeklyHappiness()
+        fetchTopWords()
+        selectImportantDiary()
+
+        // 更新當天分析的標記，避免重複執行
+        UserDefaults.standard.set(today, forKey: "lastAnalysisDate")
+        print("✅ [DEBUG] AI 分析執行完成")
+    }
+
+    private func currentDateString() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        return formatter.string(from: Date())
     }
     
     //重要回顧
     @ViewBuilder
     private func importantReviewBox(sectionHeight: CGFloat) -> some View {
-        ZStack(alignment: .bottomTrailing) { 
+        ZStack(alignment: .bottomTrailing) {
             if let selectedDiary = selectedDiary, let imageData = selectedDiary.imageData, let uiImage = UIImage(data: imageData) {
                 Image(uiImage: uiImage)
                     .resizable()
@@ -98,8 +163,8 @@ struct AnalyzeView: View {
                     .frame(height: sectionHeight)
                     .foregroundColor(.gray)
             }
-            
-            //半透明白色底部 + 文字
+
+            // 讓白色底部區塊與圖片保持居中
             HStack {
                 Spacer()
                 VStack(alignment: .leading, spacing: 4) {
@@ -121,14 +186,13 @@ struct AnalyzeView: View {
                         .shadow(radius: 3)
                 )
             }
-            .frame(width: UIScreen.main.bounds.width * 0.7,height: sectionHeight * 0.8, alignment: .leading)
-            .offset(x: 0, y: -16)
+            .frame(width: UIScreen.main.bounds.width * 0.6, height: sectionHeight * 0.8, alignment: .leading) // ✅ 讓白色區塊更對齊
+            .offset(x: 0, y: -16) // ✅ 這樣不會影響總體對齊
         }
-        .frame(height: sectionHeight) //
-        .cornerRadius(12)
+        .frame(height: sectionHeight)
     }
 
-    // **AI 近況回饋**
+    //AI 近況回饋
     @ViewBuilder
     private func AIResponseView(sectionHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -137,16 +201,76 @@ struct AnalyzeView: View {
                 .foregroundColor(.black)
                 .padding(.leading, 8)
 
-            Text(aiFeedback)
+            Text("\u{00A0}\u{00A0}\(aiFeedback)") // ✅ 第一行空兩格
                 .font(.subheadline)
                 .foregroundColor(.black)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .lineLimit(4)
+                .onTapGesture {
+                    isShowingFullResponse = true // 👉 開啟彈窗
+                }
         }
+        .padding(12)
         .frame(height: sectionHeight * 0.85)
         .background(cardBackground)
         .layoutPriority(1)
+        .fullScreenCover(isPresented: $isShowingFullResponse) { // 📌 讓視窗半透明
+            FullResponseView(aiFeedback: aiFeedback)
+                .background(Color.clear) // ✅ 這樣讓背景不會變成灰色
+        }
     }
+
+
+    //近況回顧 小框框
+    struct FullResponseView: View {
+        let aiFeedback: String
+        @Environment(\.dismiss) var dismiss // 讓使用者可以關閉視窗
+
+        var body: some View {
+            ZStack {
+                // ✅ 讓背景變得更透明、更霧面
+                Color.black.opacity(0.5)
+                    .ignoresSafeArea()
+                    .onTapGesture { dismiss() } // 👉 點擊背景關閉視窗
+
+                VStack(spacing: 12) {
+                    Text("完整回饋")
+                        .font(.headline)
+                        .foregroundColor(.black)
+                        .padding(.top, 10)
+
+                    ScrollView {
+                        Text(aiFeedback)
+                            .font(.body)
+                            .foregroundColor(.black)
+                            .padding()
+                    }
+                    .frame(maxHeight: UIScreen.main.bounds.height * 0.3) // 限制滾動區域
+
+                    Button("關閉") {
+                        dismiss() // 👉 讓使用者關閉彈窗
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+                    .padding(.horizontal, 20)
+                }
+                .frame(width: UIScreen.main.bounds.width * 0.8, // 限制寬度 80% 螢幕
+                       height: UIScreen.main.bounds.height * 0.5) // 限制高度 50% 螢幕
+                .background(Color.white)
+                .cornerRadius(15)
+                .shadow(radius: 10)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 15)
+                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                )
+                .padding()
+            }
+        }
+    }
+
 
 
     // **常用字詞**
